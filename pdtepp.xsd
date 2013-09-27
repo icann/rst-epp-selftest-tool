@@ -1,0 +1,493 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (c) 2013 Internet Corporation For Assigned Names and Numbers.
+  All rights reserved. 
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:element name="PDTEPP">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="Server"/>
+        <xs:element ref="Client"/>
+        <xs:element ref="Login"/>
+        <xs:element ref="DomainCreate01"/>
+        <xs:element ref="DomainCreate02"/>
+        <xs:element ref="DomainCreate03"/>
+        <xs:element ref="DomainRenew01"/>
+        <xs:element ref="DomainTransfer01"/>
+        <xs:element minOccurs="0" ref="DomainTransfer02"/>
+        <xs:element ref="DomainDelete01"/>
+        <xs:element ref="ContactCreate01"/>
+        <xs:element ref="ContactDelete01"/>
+        <xs:element minOccurs="0" ref="HostDelete01"/>
+        <xs:element minOccurs="0" ref="HostUpdate01"/>
+        <xs:element ref="ContactUpdate01"/>
+        <xs:element ref="DomainUpdate01"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Server">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="IPv4">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Address" type="ipv4"/>
+              <xs:element ref="Port"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element minOccurs="0" name="IPv6">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Address" type="ipv6"/>
+              <xs:element ref="Port"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element ref="Certificate"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Port">
+    <xs:simpleType>
+      <xs:restriction base="xs:positiveInteger">
+        <xs:maxInclusive value="65535"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="Certificate" type="xs:base64Binary"/>
+  <xs:element name="Client">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="CLID"/>
+        <xs:element ref="PW"/>
+        <xs:element minOccurs="0" ref="KeyPair"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="CLID" type="xs:string"/>
+  <xs:element name="PW" type="xs:string"/>
+  <xs:element name="KeyPair">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="P12"/>
+        <xs:element minOccurs="0" ref="PW"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="P12" type="xs:base64Binary"/>
+  <xs:element name="Login">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="Domain"/>
+        <xs:element ref="Contact"/>
+        <xs:element minOccurs="0" ref="Host"/>
+        <xs:element ref="SecDNS"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" name="Extension">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="URI"/>
+              <xs:element ref="SL"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Domain">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="URI"/>
+        <xs:element ref="SL"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="URI" type="xs:string"/>
+  <xs:element name="SL" type="xs:string"/>
+  <xs:element name="Contact">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="URI"/>
+        <xs:element ref="SL"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Host">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="URI"/>
+        <xs:element ref="SL"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="SecDNS">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="URI"/>
+        <xs:element ref="SL"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="DomainCreate01">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="fqdn"/>
+        <xs:element minOccurs="0" ref="Period"/>
+        <xs:element ref="RegistrantId"/>
+        <xs:element minOccurs="0" ref="Admin"/>
+        <xs:element minOccurs="0" ref="Tech"/>
+        <xs:element minOccurs="0" ref="Billing"/>
+        <xs:element minOccurs="0" ref="AuthPw"/>
+        <xs:element name="NS01" type="fqdn"/>
+        <xs:element name="NS02" type="fqdn"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="RegistrantId" type="xs:string"/>
+  <xs:element name="Admin" type="xs:string"/>
+  <xs:element name="Tech" type="xs:string"/>
+  <xs:element name="Billing" type="xs:string"/>
+  <xs:element name="AuthPw" type="xs:string"/>
+  <xs:element name="DomainCreate02">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="fqdn"/>
+        <xs:element minOccurs="0" ref="Period"/>
+        <xs:element minOccurs="0" ref="RegistrantId"/>
+        <xs:element minOccurs="0" ref="Admin"/>
+        <xs:element minOccurs="0" ref="Tech"/>
+        <xs:element minOccurs="0" ref="Billing"/>
+        <xs:element minOccurs="0" ref="AuthPw"/>
+        <xs:element name="NS01">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Name" type="fqdn"/>
+              <xs:element name="IPv4" type="ipv4"/>
+              <xs:element name="IPv6" type="ipv6"/>
+              <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="NS02">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Name" type="fqdn"/>
+              <xs:element name="IPv4" type="ipv4"/>
+              <xs:element name="IPv6" type="ipv6"/>
+              <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element minOccurs="0" ref="Create"/>
+        <xs:element minOccurs="0" ref="Update"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Create">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Update">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="DomainCreate03">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="fqdn"/>
+        <xs:element minOccurs="0" ref="Period"/>
+        <xs:element ref="RegistrantId"/>
+        <xs:element minOccurs="0" ref="Admin"/>
+        <xs:element minOccurs="0" ref="Tech"/>
+        <xs:element minOccurs="0" ref="Billing"/>
+        <xs:element minOccurs="0" ref="AuthPw"/>
+        <xs:element name="NS01" type="fqdn"/>
+        <xs:element name="NS02" type="fqdn"/>
+        <xs:element ref="DNSSEC"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="DNSSEC">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="DNSKEY"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="DS"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="DomainRenew01">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="fqdn"/>
+        <xs:element minOccurs="0" ref="Period"/>
+        <xs:element ref="ExpDate"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="ExpDate" type="xs:date"/>
+  <xs:element name="DomainTransfer01">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="xs:string"/>
+        <xs:element minOccurs="0" ref="Period"/>
+        <xs:element ref="AuthInfo"/>
+        <xs:element minOccurs="0" ref="AuthRoid"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="AuthInfo" type="xs:string"/>
+  <xs:element name="AuthRoid" type="xs:string"/>
+  <xs:element name="DomainTransfer02">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="fqdn"/>
+        <xs:element minOccurs="0" ref="Period"/>
+        <xs:element ref="AuthInfo"/>
+        <xs:element minOccurs="0" ref="AuthRoid"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="DomainDelete01">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="fqdn"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="ContactCreate01">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="ContactID"/>
+        <xs:element minOccurs="0" ref="PostalInfoInt"/>
+        <xs:element minOccurs="0" ref="PostalInfoLoc"/>
+        <xs:element minOccurs="0" ref="Voice"/>
+        <xs:element minOccurs="0" ref="Fax"/>
+        <xs:element ref="Email"/>
+        <xs:element minOccurs="0" ref="Auth"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="ContactID" type="xs:string"/>
+  <xs:element name="PostalInfoInt">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="xs:string"/>
+        <xs:element minOccurs="0" ref="Org"/>
+        <xs:element minOccurs="0" ref="Street"/>
+        <xs:element ref="City"/>
+        <xs:element minOccurs="0" ref="StateProvince"/>
+        <xs:element minOccurs="0" ref="PostalCode"/>
+        <xs:element ref="CountryCode"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Org" type="xs:string"/>
+  <xs:element name="Street">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element maxOccurs="unbounded" ref="Line"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Line" type="xs:string"/>
+  <xs:element name="City" type="xs:string"/>
+  <xs:element name="StateProvince" type="xs:string"/>
+  <xs:element name="PostalCode" type="xs:string"/>
+  <xs:element name="CountryCode" type="xs:string"/>
+  <xs:element name="PostalInfoLoc">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="xs:string"/>
+        <xs:element minOccurs="0" ref="Org"/>
+        <xs:element minOccurs="0" ref="Street"/>
+        <xs:element ref="City"/>
+        <xs:element minOccurs="0" ref="StateProvince"/>
+        <xs:element minOccurs="0" ref="PostalCode"/>
+        <xs:element ref="CountryCode"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Voice" type="xs:string"/>
+  <xs:element name="Fax" type="xs:string"/>
+  <xs:element name="Email" type="xs:string"/>
+  <xs:element name="Auth" type="xs:string"/>
+  <xs:element name="ContactDelete01">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="ContactID"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="HostDelete01">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="fqdn"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="HostUpdate01">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="fqdn"/>
+        <xs:element ref="IP"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="IP" type="ip"/>
+  <xs:element name="ContactUpdate01">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="ContactID"/>
+        <xs:element ref="Email"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="DomainUpdate01">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Name" type="fqdn"/>
+        <xs:element ref="DNSSEC"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Extension"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Extension">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element minOccurs="0" ref="ExtName"/>
+        <xs:element ref="URI"/>
+        <xs:element ref="SL"/>
+        <xs:element minOccurs="0" ref="ExtValue"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" name="Field">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Name" type="xs:Name"/>
+              <xs:element minOccurs="0" name="Value" type="xs:string"/>
+              <xs:element minOccurs="0" maxOccurs="unbounded" name="Field">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Name" type="xs:Name"/>
+                    <xs:element name="Value" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="ExtName" type="xs:Name"/>
+  <xs:element name="ExtValue" type="xs:string"/>
+  <xs:element name="Period">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Value" type="xs:positiveInteger"/>
+        <xs:element ref="Type"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Type">
+    <xs:simpleType>
+      <xs:restriction base="xs:token">
+        <xs:enumeration value="Y"/>
+        <xs:enumeration value="M"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="DNSKEY">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="Flags"/>
+        <xs:element ref="Protocol"/>
+        <xs:element ref="Algorithm"/>
+        <xs:element ref="PublicKey"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="Flags">
+    <xs:simpleType>
+      <xs:restriction base="xs:nonNegativeInteger">
+        <xs:maxInclusive value="65535"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="Protocol">
+    <xs:simpleType>
+      <xs:restriction base="xs:nonNegativeInteger">
+        <xs:maxInclusive value="255"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="Algorithm">
+    <xs:simpleType>
+      <xs:restriction base="xs:nonNegativeInteger">
+        <xs:maxInclusive value="255"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="PublicKey" type="xs:base64Binary"/>
+  <xs:element name="DS">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="KeyTag"/>
+        <xs:element ref="Algorithm"/>
+        <xs:element ref="DigestType"/>
+        <xs:element ref="Digest"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="KeyTag">
+    <xs:simpleType>
+      <xs:restriction base="xs:nonNegativeInteger">
+        <xs:maxInclusive value="65535"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="DigestType">
+    <xs:simpleType>
+      <xs:restriction base="xs:nonNegativeInteger">
+        <xs:maxInclusive value="255"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="Digest" type="xs:hexBinary"/>
+  <xs:simpleType name="ipv4">
+    <xs:restriction base="xs:token">
+      <xs:pattern value="(25[0-5]|2[0-4][0-9]|[0-1]?[0-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9]?[0-9])"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="ipv6">
+    <xs:restriction base="xs:token">
+      <xs:pattern value="([0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){7}|([0-9A-Fa-f]{1,4}:){1,6}(:[0-9A-Fa-f]{1,4}){1}|([0-9A-Fa-f]{1,4}:){1,5}(:[0-9A-Fa-f]{1,4}){1,2}|([0-9A-Fa-f]{1,4}:){1,4}(:[0-9A-Fa-f]{1,4}){1,3}|([0-9A-Fa-f]{1,4}:){1,3}(:[0-9A-Fa-f]{1,4}){1,4}|([0-9A-Fa-f]{1,4}:){1,2}(:[0-9A-Fa-f]{1,4}){1,5}|([0-9A-Fa-f]{1,4}:){1}(:[0-9A-Fa-f]{1,4}){1,6})"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="ip">
+    <xs:restriction base="xs:token">
+      <xs:pattern value="((25[0-5]|2[0-4][0-9]|[0-1]?[0-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9]?[0-9])\.(25[0-5]|2[0-4][0-9]|[0-1]?[0-9]?[0-9])|([0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){7}|([0-9A-Fa-f]{1,4}:){1,6}(:[0-9A-Fa-f]{1,4}){1}|([0-9A-Fa-f]{1,4}:){1,5}(:[0-9A-Fa-f]{1,4}){1,2}|([0-9A-Fa-f]{1,4}:){1,4}(:[0-9A-Fa-f]{1,4}){1,3}|([0-9A-Fa-f]{1,4}:){1,3}(:[0-9A-Fa-f]{1,4}){1,4}|([0-9A-Fa-f]{1,4}:){1,2}(:[0-9A-Fa-f]{1,4}){1,5}|([0-9A-Fa-f]{1,4}:){1}(:[0-9A-Fa-f]{1,4}){1,6}))"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="fqdn">
+    <xs:restriction base="xs:token">
+      <xs:pattern value="([a-zA-Z0-9_\-]+\.)+[a-zA-Z0-9_\-]+\.?"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

@@ -1,0 +1,243 @@
+#!/usr/bin/perl
+#
+# Copyright (c) 2013 .SE (The Internet Infrastructure Foundation).
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+# IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+# GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+# IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+# IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Written by Mattias Päivärinta <mattias.paivarinta@iis.se>
+
+use strict;
+use warnings;
+
+use Config::IniFiles;
+use Cwd 'abs_path';
+use DateTime;
+use File::Basename;
+use Getopt::Long;
+use List::MoreUtils 'true';
+use Pod::Usage;
+
+# options
+my $proxy;
+my $case;
+my $help;
+my $list;
+my $log_file;
+my $epp_ini = 'config.ini';
+
+# Environment
+my $proxy_user;
+my $proxy_host;
+my $proxy_key;
+
+# Globals
+my $ServerIpv4;
+my $ServerIpv4Port;
+my $ServerIpv6;
+my $ServerIpv6Port;
+
+# Constants
+my $progdir = dirname($0);
+my %testlist = (
+        "A_pdtConnTest"      => "pdtConnTest.php",
+        "B_pdtConnTest_v6"   => "pdtConnTest.php",
+        "C_pdtDomCreate01"   => "pdtDomCreate01.php",
+        "D_pdtDomCreate02"   => "pdtDomCreate02.php",
+        "E_pdtDomCreate03"   => "pdtDomCreate03.php",
+        "F_pdtDomRenew01"    => "pdtDomRenew01.php",
+        "G_pdtDomTransfer01" => "pdtDomTransfer01.php",
+        "H_pdtDomTransfer02" => "pdtDomTransfer02.php",
+        "I_pdtDomDelete01"   => "pdtDomDelete01.php",
+        "J_pdtConCreate01"   => "pdtConCreate01.php",
+        "K_pdtConDelete01"   => "pdtConDelete01.php",
+        "L_pdtHostDelete01"  => "pdtHostDelete01.php",
+        "M_pdtHostUpdate01"  => "pdtHostUpdate01.php",
+        "N_pdtConUpdate01"   => "pdtConUpdate01.php",
+        "O_pdtDomUpdate01"   => "pdtDomUpdate01.php",
+        );
+
+# Append to $log_file
+sub print_log {
+    open(my $fh, '>>:encoding(UTF-8)', $log_file);
+    print $fh @_;
+    close($fh);
+}
+
+# Parse command line options
+GetOptions(
+    'help|?'      => \$help,
+    'list|?'      => \$list,
+    'proxy|?'     => \$proxy,
+    'conf=s'      => \$epp_ini,
+    'case=s'      => \$case,
+    'log-file=s'  => \$log_file
+) or pod2usage(2);
+pod2usage(1) if ($help);
+if (defined $list) {
+    print $_, "\n" for sort keys %testlist;
+    exit;
+}
+pod2usage(2) unless (defined $case);
+if (defined $proxy) {
+    $proxy_user = $ENV{'EPP_PROXY_USER'};
+    $proxy_host = $ENV{'EPP_PROXY_HOST'};
+    $proxy_key = $ENV{'EPP_PROXY_KEY'};
+    pod2usage(2) unless ((defined $proxy_user) and (defined $proxy_host) and (defined $proxy_key));
+}
+if (not exists $testlist{$case}) {
+    print "Unknown test case $case\n";
+    print "Known test cases are:\n";
+    foreach my $case (sort keys %testlist) {
+        print "  $case\n";
+    }
+    exit 2;
+}
+$log_file = "log/$case.log" unless defined $log_file;
+
+# Sanitize command line options
+$epp_ini = abs_path($epp_ini);
+my $log_dir = dirname($log_file);
+if (-d $log_dir) {
+    $log_file = abs_path($log_file);
+} else {
+    die "Log directory does not exist: $log_dir"
+}
+
+# Read configuration file
+my $ini = Config::IniFiles->new( -file => $epp_ini ) or die('Failed to read input file');
+
+$ServerIpv4 = $ini->val('EppConnTest', 'EppServerIPv4');
+$ServerIpv4Port = $ini->val('EppConnTest', 'EppServerIPv4Port');
+if ($ini->val('EppConnTest', 'EppServerIPv6', '') ne '') {
+    $ServerIpv6 = $ini->val('EppConnTest', 'EppServerIPv6');
+    $ServerIpv6Port = $ini->val('EppConnTest', 'EppServerIPv6Port');
+}
+
+# Determine EPP server socket
+my ($server_protocol, $server_host, $server_port);
+if ($case eq 'B_pdtConnTest_v6') {
+    $server_protocol = 6;
+    $server_host = $ServerIpv6;
+    $server_port = $ServerIpv6Port;
+} else {
+    $server_protocol = 4;
+    $server_host = $ServerIpv4;
+    $server_port = $ServerIpv4Port;
+}
+
+# Determine where to have test case to connect
+my ($test_host, $test_port, $test_protocol);
+if (defined $proxy) {
+    $test_protocol = 4;
+    $test_host = 'localhost';
+    $test_port = 1025 + int(rand(64000));
+} else {
+    $test_protocol = $server_protocol;
+    $test_host = $server_host;
+    $test_port = $server_port;
+}
+
+# Determine test case and tunnel commands
+my ($test_command, $tunnel_command);
+if ($case eq "B_pdtConnTest_v6" and not defined $server_host) {
+    $test_command = "echo 'IPv6 address not defined for epp server  OK'";
+} else {
+    $test_command = "cd $progdir/pdtepp ; ./$testlist{$case} -t 10 -s -h $server_host -p $server_port -c $epp_ini 2>>$log_file";
+    $test_command .= ' -6' if $test_protocol == 6;
+    if (defined $proxy) {
+        my $tunnel_spec = "$test_port:[$server_host]:$server_port";
+        my $proxy_spec = "$proxy_user\@$proxy_host";
+        $tunnel_command = "ssh -o'ExitOnForwardFailure yes' -$server_protocol -i$proxy_key -L$tunnel_spec $proxy_spec 'sleep 15'";
+    }
+}
+
+# Mark start of test
+my $ts = DateTime->now(time_zone => 'UTC')->iso8601() . "Z";
+print_log "# $case @ $ts\n";
+
+# Setup tunnel
+my $tunnel_pid;
+if (defined $tunnel_command) {
+    print_log("# $tunnel_command\n");
+    $tunnel_pid = fork() or exec($tunnel_command);
+}
+
+# Execute test case
+print_log("# $test_command\n");
+system($test_command);
+my $status = $?;
+
+# Tear down tunnel
+if (defined $tunnel_pid) {
+    kill $tunnel_pid;
+}
+
+exit $status;
+
+=head1 NAME
+
+    epp-test
+
+=head1 DESCRIPTION
+
+Runs PDT EPP test cases.
+
+=head1 USAGE
+
+epp-test --help
+
+epp-test --list
+
+epp-test [options] --case CASE
+
+The first syntax shows this help message.
+The second syntax lists the names of all available test cases.
+The third syntax executes the EPP transactions specified by a PDT EPP test
+case.
+
+Optional arguments:
+
+  --case CASE       Run a specific test case
+  --list            List the names of all available test cases
+  --help            Show this help message
+  --conf FILE       Path to input data file in intermediate INI format.
+                    (default is config.ini)
+  --log-file FILE   Path to log file (default is log/{CASE}.ini)
+  --proxy           Tunnel connection through a proxy.
+                    When proxy is given, it must be accompanied with the
+                    EPP_PROXY_USER, EPP_PROXY_HOST and EPP_PROXY_KEY environment
+                    variables. (deprecated)
+
+Optional environment variabels:
+
+  EPP_PROXY_USER    Username for proxy login (deprecated)
+  EPP_PROXY_HOST    Hostname for proxy login (deprecated)
+  EPP_PROXY_KEY     Path to private key file for proxy login (deprecated)
+
+Exit statuses:
+
+  0  Test completed
+  2  Interrupted or user error
+  *  Test failed
+
+=cut

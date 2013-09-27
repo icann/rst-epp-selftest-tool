@@ -1,0 +1,975 @@
+#!/usr/bin/perl
+#
+# Copyright (c) 2013 .SE (The Internet Infrastructure Foundation).
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+# IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+# GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+# IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
+# IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Written by Jan Saell <jan@irial.com>
+
+use strict;
+use warnings;
+
+use Cwd 'abs_path';
+use DateTime;
+use File::Basename;
+use File::Temp;
+use Getopt::Long;
+use List::MoreUtils 'true';
+use Pod::Usage;
+use XML::LibXML;
+use XML::Simple qw(:strict);
+
+# Options
+my $schema = dirname($0) . '/pdtepp.xsd';
+my $help;
+my $tld;
+my $out_file = 'config.ini';
+my $out_cert = 'cert.pem';
+my $infile = 'pdtepp.xml';
+
+# Globals
+my @domArr = ();
+my @hostArr = ();
+my @conArr = ();
+
+main();
+
+sub main {
+    # Parse command line arguments
+    GetOptions(
+        'schema=s'        => \$schema,
+        'help|?'          => \$help,
+        'zone=s'          => \$tld,
+        'out-file=s'      => \$out_file,
+        'out-cert=s'      => \$out_cert,
+    ) or pod2usage(2);
+    pod2usage(1) if ($help);
+
+    pod2usage(2) unless ((defined $tld) and (defined $out_cert));
+    $infile = shift @ARGV if (@ARGV);
+    pod2usage(2) if (@ARGV);
+
+    # Parse EPP configuration
+    validateXML($schema, location => $infile);
+    my $input = XMLin($infile, SuppressEmpty => '', ForceArray => ['Extension', 'Field', 'DNSKEY', 'DS', 'Line'], KeyAttr => {});
+
+    # Create INI files
+    eppCreateIni($input);
+}
+
+sub validateXML {
+    my ($schema, @xml) = @_;
+
+    my $doc = XML::LibXML->new->load_xml(@xml);
+    my $xsdschema = XML::LibXML::Schema->new( location => $schema );
+    $xsdschema->validate( $doc );
+}
+
+sub eppCreateIni {
+    my $input = shift;
+    my $Ext;
+    my ($i, $j);
+    my ($type, $dnssec);
+    my $hostObj;
+
+    # The default time zone is UTC, but we will also enforce it.
+    # Add a 'Z' so that we indicate UTC and not local time zone for ISO8601.
+    my $timestamp = DateTime->now(time_zone => 'UTC')->iso8601() . "Z";
+
+    my $ServerIpv4 = $input->{'Server'}->{'IPv4'}->{'Address'};
+    my $ServerIpv4Port = $input->{'Server'}->{'IPv4'}->{'Port'};
+    my $ServerIpv6;
+    my $ServerIpv6Port;
+    if (defined($input->{'Server'}->{'IPv6'})) {
+	$ServerIpv6 = $input->{'Server'}->{'IPv6'}->{'Address'};
+	$ServerIpv6Port = $input->{'Server'}->{'IPv6'}->{'Port'};
+    }
+    my $domain01 = $input->{'DomainCreate01'}->{'Name'};
+    my $domain02 = $input->{'DomainCreate02'}->{'Name'};
+    my $domain03 = $input->{'DomainCreate03'}->{'Name'};
+    my $domain04 = $input->{'DomainUpdate01'}->{'Name'};
+
+
+    open(my $out, ">:encoding(UTF-8)", $out_file);
+
+    print $out "; epptest @ $timestamp\n";
+    print $out ";\n";
+    print $out "\n";
+    print $out "[EppConnTest]\n";
+    print $out "EppLoginId              = '".$input->{'Client'}->{'CLID'}."'\n";
+    print $out "EppLoginPwd             = '".$input->{'Client'}->{'PW'}."'\n";
+    print $out "EppNsDomainUri          = '".$input->{'Login'}->{'Domain'}->{'URI'}."'\n";
+    print $out "EppNsDomainSl           = '".$input->{'Login'}->{'Domain'}->{'SL'}."'\n";
+    print $out "EppNsContactUri         = '".$input->{'Login'}->{'Contact'}->{'URI'}."'\n";
+    print $out "EppNsContactSl          = '".$input->{'Login'}->{'Contact'}->{'SL'}."'\n";
+    if (defined($input->{'Login'}->{'Host'}->{'URI'})) {
+      print $out "EppNsHostUri            = '".$input->{'Login'}->{'Host'}->{'URI'}."'\n";
+      print $out "EppNsHostSl             = '".$input->{'Login'}->{'Host'}->{'SL'}."'\n";
+      $hostObj = "Y";
+    } else {
+      $hostObj = undef;
+    }
+    print $out "EppExtSecDnsUri         = '".$input->{'Login'}->{'SecDNS'}->{'URI'}."'\n";
+    print $out "EppExtSecDnsSl          = '".$input->{'Login'}->{'SecDNS'}->{'SL'}."'\n";
+    $Ext = $input->{'Login'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        print $out "EppExtUri-".$i."             = '".$exten->{'URI'}."'\n";
+        print $out "EppExtSl-".$i."              = '".$exten->{'SL'}."'\n";
+        $i++;
+    }
+    print $out "EppServerIPv4           = ".$input->{'Server'}->{'IPv4'}->{'Address'}."\n";
+    print $out "EppServerIPv4Port       = ".$input->{'Server'}->{'IPv4'}->{'Port'}."\n";
+    if (defined($input->{'Server'}->{'IPv6'})) {
+        print $out "EppServerIPv6           = ".$input->{'Server'}->{'IPv6'}->{'Address'}."\n";
+        print $out "EppServerIPv6Port       = ".$input->{'Server'}->{'IPv6'}->{'Port'}."\n";
+    } else {
+        print $out "EppServerIPv6           = \n";
+        print $out "EppServerIPv6Port       = \n";
+    }
+    if (prdef($input->{'Client'}->{'KeyPair'}->{'P12'}) ne "") {
+        print $out "EppClientCertificate    = yes\n";
+        # Convert to pem
+        my $pw = prdef($input->{'Client'}->{'KeyPair'}->{'PW'});
+        my ($fh, $tmp) = mkstemps( '/tmp/inXXXXXX', '.txt' );
+        my $p = $input->{'Client'}->{'KeyPair'}->{'P12'};
+        $p =~ s/[\t ]+$//mg; # Remove ending spaces/tabs
+        $p =~ s/^[\t ]+//mg; # Remove starting spaces/tabs
+        $p =~ s/^$//mg;      # Remove completely empty lines
+        print $fh "$p";
+        close $fh;
+        my $pdtpw = 'pdtpwd';  # TODO: fix crappy hardcoded password
+
+        # Convert from base64 via p12 to pem
+        system("exec 1>&2 ; base64 -d < $tmp | openssl pkcs12 -passin 'pass:$pw' -out $out_cert -passout 'pass:$pdtpw'");
+
+        # Remove tmp file
+        unlink $tmp;
+
+        print $out "EppClientKeyPairPwd     = '$pdtpw'\n";
+    } else {
+        print $out "EppClientCertificate    = no\n";
+        print $out "EppClientKeyPairPwd     = \n";
+        unlink $out_cert;
+    }
+    # Write the path of the pem file wheter it exists or not.
+    # This helps external tools notice if the key material disappears from the XML.
+    print $out "EppClientKeyPairPem     = " . abs_path($out_cert) . "\n";
+
+    # TODO Fix convert to pem
+    #print $out "EppServerCertificatePem = ".$input->{'Server'}->{'Certificate'}."\n";
+    print $out "EppServerCertificatePem = \n";
+    print $out "\n";
+
+    print $out "[EppDomCreate01]\n";
+    print STDERR "WARNING: EppDomCreate01:Name: ".$domain01." not in zone\n" if (not $domain01 =~ m/$tld$/i) ;
+    push @domArr, $domain01;
+    print $out "EppDomCreate01Name              = ".$input->{'DomainCreate01'}->{'Name'}."\n";
+    print $out "EppDomCreate01Period            = ".prdef($input->{'DomainCreate01'}->{'Period'}->{'Type'})."\n";
+    print $out "EppDomCreate01PeriodValue       = ".prdef($input->{'DomainCreate01'}->{'Period'}->{'Value'})."\n";
+    print $out "EppDomCreate01RegistrantId      = ".$input->{'DomainCreate01'}->{'RegistrantId'}."\n";
+    print $out "EppDomCreate01AdminId           = '".prdef($input->{'DomainCreate01'}->{'Admin'})."'\n";
+    print $out "EppDomCreate01TechId            = '".prdef($input->{'DomainCreate01'}->{'Tech'})."'\n";
+    print $out "EppDomCreate01BillingId         = '".prdef($input->{'DomainCreate01'}->{'Billing'})."'\n";
+    print $out "EppDomCreate01AuthPw            = '".prdef($input->{'DomainCreate01'}->{'AuthPw'})."'\n";
+    print $out "EppDomCreate01Ns01              = ".$input->{'DomainCreate01'}->{'NS01'}."\n";
+    print $out "EppDomCreate01Ns02              = ".$input->{'DomainCreate01'}->{'NS02'}."\n";
+    $Ext = $input->{'DomainCreate01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppDomCreate01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppDomCreate01Ext".$no."Uri          = '".$exten->{'URI'}."'\n";
+        print $out "EppDomCreate01Ext".$no."Sl           = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppDomCreate01Ext".$no."ExtValue     = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppDomCreate01Ext".$no."Field".$noj."      = ".$field->{'Name'}."\n";
+            print $out "EppDomCreate01Ext".$no."Value".$noj."      = ".$field->{'Value'}."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppDomCreate01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppDomCreate01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    print $out "\n";
+
+    print $out "[EppDomCreate02]\n";
+    print STDERR "WARNING: EppDomCreate02:Name: ".$domain02." not in zone\n" if (not $domain02 =~ m/$tld$/i) ;
+    print STDERR "WARNING: $domain02 already in test\n" if (true { /$domain02/i } @domArr) > 0;
+    push @domArr, $domain02;
+    print $out "EppDomCreate02Name              = ".$input->{'DomainCreate02'}->{'Name'}."\n";
+    print $out "EppDomCreate02Period            = ".prdef($input->{'DomainCreate02'}->{'Period'}->{'Type'})."\n";
+    print $out "EppDomCreate02PeriodValue       = ".prdef($input->{'DomainCreate02'}->{'Period'}->{'Value'})."\n";
+    print $out "EppDomCreate02RegistrantId      = ".$input->{'DomainCreate02'}->{'RegistrantId'}."\n";
+    print $out "EppDomCreate02AdminId           = '".prdef($input->{'DomainCreate02'}->{'Admin'})."'\n";
+    print $out "EppDomCreate02TechId            = '".prdef($input->{'DomainCreate02'}->{'Tech'})."'\n";
+    print $out "EppDomCreate02BillingId         = '".prdef($input->{'DomainCreate02'}->{'Billing'})."'\n";
+    print $out "EppDomCreate02AuthPw            = '".prdef($input->{'DomainCreate02'}->{'AuthPw'})."'\n";
+    print STDERR "WARNING: EppDomCreate02:Ns01: ".$input->{'DomainCreate02'}->{'NS01'}->{'Name'}." not subordinate\n" if (not $input->{'DomainCreate02'}->{'NS01'}->{'Name'} =~ m/$domain02$/i) ;
+    print $out "EppDomCreate02Ns01              = ".$input->{'DomainCreate02'}->{'NS01'}->{'Name'}."\n";
+    print $out "EppDomCreate02Ns01Ipv4          = ".$input->{'DomainCreate02'}->{'NS01'}->{'IPv4'}."\n";
+    print $out "EppDomCreate02Ns01Ipv6          = ".$input->{'DomainCreate02'}->{'NS01'}->{'IPv6'}."\n";
+    print STDERR "WARNING: EppDomCreate02:Ns02: ".$input->{'DomainCreate02'}->{'NS02'}->{'Name'}." not subordinate\n" if (not $input->{'DomainCreate02'}->{'NS02'}->{'Name'} =~ m/$domain02$/i) ;
+    print $out "EppDomCreate02Ns02              = ".$input->{'DomainCreate02'}->{'NS02'}->{'Name'}."\n";
+    print $out "EppDomCreate02Ns02Ipv4          = ".$input->{'DomainCreate02'}->{'NS02'}->{'IPv4'}."\n";
+    print $out "EppDomCreate02Ns02Ipv6          = ".$input->{'DomainCreate02'}->{'NS02'}->{'IPv6'}."\n";
+    if (prdef($input->{'DomainCreate02'}->{'Create'}) ne '') {
+        $Ext = $input->{'DomainCreate02'}->{'Create'}->{'Extension'};
+        $i = 1;
+        foreach my $exten (@{$Ext}) {
+            my $no = sprintf("%02d",$i);
+            if (defined($exten->{'ExtName'})) {
+                print $out "EppDomCreate02Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+            }
+            print $out "EppDomCreate02Ext".$no."Uri          = '".$exten->{'URI'}."'\n";
+            print $out "EppDomCreate02Ext".$no."Sl           = '".$exten->{'SL'}."'\n";
+            if (defined($exten->{'ExtValue'})) {
+                print $out "EppDomCreate02Ext".$no."ExtValue     = '".$exten->{'ExtValue'}."'\n";
+            }
+            my $j = 1;
+            foreach my $field (@{$exten->{'Field'}}) {
+                my $noj = sprintf("%02d",$j);
+                print $out "EppDomCreate02Ext".$no."Field".$noj."      = ".$field->{'Name'}."\n";
+                print $out "EppDomCreate02Ext".$no."Value".$noj."      = ".$field->{'Value'}."\n";
+                my $k = 1;
+                foreach my $field2 (@{$field->{'Field'}}) {
+                    my $nok = sprintf("%02d",$k);
+                    print $out "EppDomCreate02Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                    print $out "EppDomCreate02Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                    $k++;
+                }
+                $j++;
+            }
+            $i++;
+        }
+    }
+    if (prdef($input->{'DomainCreate02'}->{'Update'}) ne '') {
+        $Ext = $input->{'DomainCreate02'}->{'Update'}->{'Extension'};
+        $i = 1;
+        foreach my $exten (@{$Ext}) {
+            my $no = sprintf("%02d",$i);
+            if (defined($exten->{'ExtName'})) {
+                print $out "EppDomCreate02UpdExt".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+            }
+            print $out "EppDomCreate02UpdExt".$no."Uri       = '".$exten->{'URI'}."'\n";
+            print $out "EppDomCreate02UpdExt".$no."Sl        = '".$exten->{'SL'}."'\n";
+            if (defined($exten->{'ExtValue'})) {
+                print $out "EppDomCreate02UpdExt".$no."ExtValue  = '".$exten->{'ExtValue'}."'\n";
+            }
+            my $j = 1;
+            foreach my $field (@{$exten->{'Field'}}) {
+                my $noj = sprintf("%02d",$j);
+                print $out "EppDomCreate02UpdExt".$no."Field".$noj."   = ".$field->{'Name'}."\n";
+                print $out "EppDomCreate02UpdExt".$no."Value".$noj."   = ".$field->{'Value'}."\n";
+                my $k = 1;
+                foreach my $field2 (@{$field->{'Field'}}) {
+                    my $nok = sprintf("%02d",$k);
+                    print $out "EppDomCreate02UpdExt".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                    print $out "EppDomCreate02UpdExt".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                    $k++;
+                }
+                $j++;
+            }
+            $i++;
+        }
+    }
+    $Ext = $input->{'DomainCreate02'}->{'NS01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppDomCreate02Ns01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppDomCreate02Ns01Ext".$no."Uri      = '".$exten->{'URI'}."'\n";
+        print $out "EppDomCreate02Ns01Ext".$no."Sl       = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppDomCreate02Ns01Ext".$no."ExtValue = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppDomCreate02Ns01Ext".$no."Field".$noj."  = ".$field->{'Name'}."\n";
+            print $out "EppDomCreate02Ns01Ext".$no."Value".$noj."  = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppDomCreate02Ns01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppDomCreate02Ns01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    $Ext = $input->{'DomainCreate02'}->{'NS02'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppDomCreate02Ns02Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppDomCreate02Ns02Ext".$no."Uri      = '".$exten->{'URI'}."'\n";
+        print $out "EppDomCreate02Ns02Ext".$no."Sl       = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppDomCreate02Ns02Ext".$no."ExtValue = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppDomCreate02Ns02Ext".$no."Field".$noj."  = ".$field->{'Name'}."\n";
+            print $out "EppDomCreate02Ns02Ext".$no."Value".$noj."  = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppDomCreate02Ns02Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppDomCreate02Ns02Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    print $out "\n";
+
+    print $out "[EppDomCreate03]\n";
+    print STDERR "WARNING: EppDomCreate03:Name: ".$domain03." not in zone\n" if (not $domain03 =~ m/$tld$/i) ;
+    print STDERR "WARNING: $domain03 already in test\n" if (true { /$domain03/i } @domArr) > 0;
+    push @domArr, $domain03;
+    print $out "EppDomCreate03Name              = ".$input->{'DomainCreate03'}->{'Name'}."\n";
+    print $out "EppDomCreate03Period            = ".prdef($input->{'DomainCreate03'}->{'Period'}->{'Type'})."\n";
+    print $out "EppDomCreate03PeriodValue       = ".prdef($input->{'DomainCreate03'}->{'Period'}->{'Value'})."\n";
+    print $out "EppDomCreate03RegistrantId      = ".$input->{'DomainCreate03'}->{'RegistrantId'}."\n";
+    print $out "EppDomCreate03AdminId           = '".prdef($input->{'DomainCreate03'}->{'Admin'})."'\n";
+    print $out "EppDomCreate03TechId            = '".prdef($input->{'DomainCreate03'}->{'Tech'})."'\n";
+    print $out "EppDomCreate03BillingId         = '".prdef($input->{'DomainCreate03'}->{'Billing'})."'\n";
+    print $out "EppDomCreate03AuthPw            = '".prdef($input->{'DomainCreate03'}->{'AuthPw'})."'\n";
+    print $out "EppDomCreate03Ns01              = ".$input->{'DomainCreate03'}->{'NS01'}."\n";
+    print $out "EppDomCreate03Ns02              = ".$input->{'DomainCreate03'}->{'NS02'}."\n";
+    $Ext = $input->{'DomainCreate03'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppDomCreate03Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppDomCreate03Ext".$no."Uri          = '".$exten->{'URI'}."'\n";
+        print $out "EppDomCreate03Ext".$no."Sl           = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppDomCreate03Ext".$no."ExtValue     = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppDomCreate03Ext".$no."Field".$noj."      = ".$field->{'Name'}."\n";
+            print $out "EppDomCreate03Ext".$no."Value".$noj."      = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppDomCreate03Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppDomCreate03Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    $type = "";
+    if (defined($input->{'DomainCreate03'}->{'DNSSEC'}->{'DS'}[0])) {
+        $type = "D";
+    }
+    if (defined($input->{'DomainCreate03'}->{'DNSSEC'}->{'DNSKEY'}[0])) {
+        $type .= "K";
+    }
+    print $out "EppDomCreate03KeyType           = '".$type."'\n";
+    $i = 1;
+    if (($type eq 'D') || ($type eq "DK")) {
+        $dnssec = $input->{'DomainCreate03'}->{'DNSSEC'}->{'DS'};
+        foreach my $rec (@{$dnssec}) {
+            my $no = sprintf("%02d",$i);
+            print $out "EppDomCreate03DsKeyTag".$no."        = ".$rec->{'KeyTag'}."\n";
+            print $out "EppDomCreate03DsAlg".$no."           = ".$rec->{'Algorithm'}."\n";
+            print $out "EppDomCreate03DsDigestType".$no."    = ".$rec->{'DigestType'}."\n";
+            print $out "EppDomCreate03DsDigest".$no."        = ".$rec->{'Digest'}."\n";
+            $i++;
+        }
+    }
+    $i = 1;
+    if (($type eq 'K') || ($type eq "DK")) {
+        $dnssec = $input->{'DomainCreate03'}->{'DNSSEC'}->{'DNSKEY'};
+        foreach my $rec (@{$dnssec}) {
+            my $no = sprintf("%02d",$i);
+             print $out "EppDomCreate03KdFlags".$no."         = ".$rec->{'Flags'}."\n";
+             print $out "EppDomCreate03KdProtocol".$no."      = ".$rec->{'Protocol'}."\n";
+             print $out "EppDomCreate03KdAlg".$no."           = ".$rec->{'Algorithm'}."\n";
+             # Strip spaces/newlines etc
+             my $key = $rec->{'PublicKey'};
+             $key =~ s/\s+//g;
+             print $out "EppDomCreate03KdPubKey".$no."        = '".$key."'\n";
+             $i++;
+        }
+    }
+    print $out "\n";
+
+    print $out "[EppDomRenew01]\n";
+    print STDERR "WARNING: EppDomRenew01:Name: ".$input->{'DomainRenew01'}->{'Name'}." not in zone\n" if (not $input->{'DomainRenew01'}->{'Name'} =~ m/$tld$/i) ;
+    print STDERR "WARNING: ".$input->{'DomainRenew01'}->{'Name'}." already in test\n" if (true { /$input->{'DomainRenew01'}->{'Name'}/i } @domArr) > 0;
+    push @domArr, $input->{'DomainRenew01'}->{'Name'};
+    print $out "EppDomRenew01Name              = ".$input->{'DomainRenew01'}->{'Name'}."\n";
+    print $out "EppDomRenew01Period            = ".prdef($input->{'DomainRenew01'}->{'Period'}->{'Type'})."\n";
+    print $out "EppDomRenew01PeriodValue       = ".prdef($input->{'DomainRenew01'}->{'Period'}->{'Value'})."\n";
+    print $out "EppDomRenew01ExpDate           = ".$input->{'DomainRenew01'}->{'ExpDate'}."\n";
+    $Ext = $input->{'DomainRenew01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppDomRenew01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppDomRenew01Ext".$no."Uri          = '".$exten->{'URI'}."'\n";
+        print $out "EppDomRenew01Ext".$no."Sl           = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppDomRenew01Ext".$no."ExtValue     = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppDomRenew01Ext".$no."Field".$noj."      = ".$field->{'Name'}."\n";
+            print $out "EppDomRenew01Ext".$no."Value".$noj."      = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppDomRenew01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppDomRenew01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    print $out "\n";
+ 
+    print $out "[EppDomTransfer01]\n";
+    print STDERR "WARNING: EppDomTransfer01:Name: ".$input->{'DomainTransfer01'}->{'Name'}." not in zone\n" if (not $input->{'DomainTransfer01'}->{'Name'} =~ m/$tld$/i) ;
+    print STDERR "WARNING: ".$input->{'DomainTransfer01'}->{'Name'}." already in test\n" if (true { /$input->{'DomainTransfer01'}->{'Name'}/i } @domArr) > 0;
+    push @domArr, $input->{'DomainTransfer01'}->{'Name'};
+    print $out "EppDomTransfer01Name            = ".$input->{'DomainTransfer01'}->{'Name'}."\n";
+    print $out "EppDomTransfer01AddPeriod       = ".."\n";
+    if (defined($input->{'DomainTransfer01'}->{'Period'})) {
+        print $out "EppDomTransfer01AddPeriod       = Y\n";
+        print $out "EppDomTransfer01Period          = ".$input->{'DomainTransfer01'}->{'Period'}->{'Type'}."\n";
+        print $out "EppDomTransfer01PeriodValue     = ".$input->{'DomainTransfer01'}->{'Period'}->{'Value'}."\n";
+    } else {
+        print $out "EppDomTransfer01AddPeriod       = N\n";
+        print $out "EppDomTransfer01Period          = \n";
+        print $out "EppDomTransfer01PeriodValue     = \n";
+    }
+    print $out "EppDomTransfer01AuthInfo        = ".$input->{'DomainTransfer01'}->{'AuthInfo'}."\n";
+    if (defined($input->{'DomainTransfer01'}->{'AuthRoid'})) {
+        print $out "EppDomTransfer01AuthRoid        = ".$input->{'DomainTransfer01'}->{'AuthRoid'}."\n";
+    } else {
+        print $out "EppDomTransfer01AuthRoid        = \n";
+    }
+
+    $Ext = $input->{'DomainTransfer01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppDomTransfer01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppDomTransfer01Ext".$no."Uri        = '".$exten->{'URI'}."'\n";
+        print $out "EppDomTransfer01Ext".$no."Sl         = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppDomTransfer01Ext".$no."ExtValue   = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppDomTransfer01Ext".$no."Field".$noj."    = ".$field->{'Name'}."\n";
+            print $out "EppDomTransfer01Ext".$no."Value".$noj."    = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppDomTransfer01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppDomTransfer01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    print $out "\n";
+ 
+    print $out "[EppDomTransfer02]\n";
+    if (defined($input->{'DomainTransfer02'})) {
+        print $out "EppDomTransfer02Approve         = Y\n";
+        print STDERR "WARNING: EppDomTransfer02:Name: ".$input->{'DomainTransfer02'}->{'Name'}." not in zone\n" if (not $input->{'DomainTransfer02'}->{'Name'} =~ m/$tld$/i) ;
+        print STDERR "WARNING: ".$input->{'DomainTransfer02'}->{'Name'}." already in test\n" if (true { /$input->{'DomainTransfer02'}->{'Name'}/i } @domArr) > 0;
+        push @domArr, $input->{'DomainTransfer02'}->{'Name'};
+        print $out "EppDomTransfer02Name            = ".$input->{'DomainTransfer02'}->{'Name'}."\n";
+        if (defined($input->{'DomainTransfer02'}->{'Period'})) {
+            print $out "EppDomTransfer02AddPeriod       = Y\n";
+            print $out "EppDomTransfer02Period          = ".$input->{'DomainTransfer02'}->{'Period'}->{'Type'}."\n";
+            print $out "EppDomTransfer02PeriodValue     = ".$input->{'DomainTransfer02'}->{'Period'}->{'Value'}."\n";
+        } else {
+            print $out "EppDomTransfer02AddPeriod       = N\n";
+            print $out "EppDomTransfer02Period          = \n";
+            print $out "EppDomTransfer02PeriodValue     = \n";
+        }
+        print $out "EppDomTransfer02AuthInfo        = ".$input->{'DomainTransfer02'}->{'AuthInfo'}."\n";
+        if (defined($input->{'DomainTransfer02'}->{'AuthRoid'})) {
+            print $out "EppDomTransfer02AuthRoid        = ".$input->{'DomainTransfer02'}->{'AuthRoid'}."\n";
+        } else {
+            print $out "EppDomTransfer02AuthRoid        = \n";
+        }
+    
+        $Ext = $input->{'DomainTransfer02'}->{'Extension'};
+        $i = 1;
+        foreach my $exten (@{$Ext}) {
+            my $no = sprintf("%02d",$i);
+            if (defined($exten->{'ExtName'})) {
+                print $out "EppDomTransfer02Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+            }
+            print $out "EppDomTransfer02Ext".$no."Uri        = '".$exten->{'URI'}."'\n";
+            print $out "EppDomTransfer02Ext".$no."Sl         = '".$exten->{'SL'}."'\n";
+            if (defined($exten->{'ExtValue'})) {
+                print $out "EppDomTransfer02Ext".$no."ExtValue   = '".$exten->{'ExtValue'}."'\n";
+            }
+            my $j = 1;
+            foreach my $field (@{$exten->{'Field'}}) {
+                my $noj = sprintf("%02d",$j);
+                print $out "EppDomTransfer02Ext".$no."Field".$noj."    = ".$field->{'Name'}."\n";
+                print $out "EppDomTransfer02Ext".$no."Value".$noj."    = ".prdef($field->{'Value'})."\n";
+                my $k = 1;
+                foreach my $field2 (@{$field->{'Field'}}) {
+                    my $nok = sprintf("%02d",$k);
+                    print $out "EppDomTransfer01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                    print $out "EppDomTransfer01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                    $k++;
+                }
+                $j++;
+            }
+            $i++;
+        }
+    } else {
+        print $out "EppDomTransfer02Approve         = N\n";
+        print $out "EppDomTransfer02Name            = \n";
+        print $out "EppDomTransfer02PendingExt      = N\n";
+        print $out "EppDomTransfer02AddPeriod       = N\n";
+        print $out "EppDomTransfer02Period          = \n";
+        print $out "EppDomTransfer02PeriodValue     = \n";
+        print $out "EppDomTransfer02AuthInfo        = \n";
+        print $out "EppDomTransfer02AuthRoid        = \n";
+    }
+    print $out "\n";
+
+    print $out "[EppDomDelete01]\n";
+    print STDERR "WARNING: EppDomDelete01:Name: ".$input->{'DomainDelete01'}->{'Name'}." not in zone\n" if (not $input->{'DomainDelete01'}->{'Name'} =~ m/$tld$/i) ;
+    print STDERR "WARNING: ".$input->{'DomainDelete01'}->{'Name'}." already in test\n" if (true { /$input->{'DomainDelete01'}->{'Name'}/i } @domArr) > 0;
+    push @domArr, $input->{'DomainDelete01'}->{'Name'};
+    print $out "EppDomDelete01Name              = ".$input->{'DomainDelete01'}->{'Name'}."\n";
+    $Ext = $input->{'DomainDelete01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppDomDelete01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppDomDelete01Ext".$no."Uri          = '".$exten->{'URI'}."'\n";
+        print $out "EppDomDelete01Ext".$no."Sl           = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppDomDelete01Ext".$no."ExtValue     = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppDomDelete01Ext".$no."Field".$noj."      = ".$field->{'Name'}."\n";
+            print $out "EppDomDelete01Ext".$no."Value".$noj."      = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppDomDelete01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppDomDelete01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    print $out "\n";
+ 
+    print $out "[EppConCreate01]\n";
+    print $out "EppConCreate01Id                = ".$input->{'ContactCreate01'}->{'ContactID'}."\n";
+    push @conArr, $input->{'ContactCreate01'}->{'ContactID'};
+    if (defined($input->{'ContactCreate01'}->{'PostalInfoInt'})) {
+        print $out "EppConCreate01PIntMand          = Y\n";
+        print $out "EppConCreate01PIntName          = '".$input->{'ContactCreate01'}->{'PostalInfoInt'}->{'Name'}."'\n";
+        print $out "EppConCreate01PIntOrg           = '".prdef($input->{'ContactCreate01'}->{'PostalInfoInt'}->{'Org'})."'\n";
+        print $out "EppConCreate01PIntStreet1       = '".prdef($input->{'ContactCreate01'}->{'PostalInfoInt'}->{'Street'}->{'Line'}[0])."'\n";
+        print $out "EppConCreate01PIntStreet2       = '".prdef($input->{'ContactCreate01'}->{'PostalInfoInt'}->{'Street'}->{'Line'}[1])."'\n";
+        print $out "EppConCreate01PIntStreet3       = '".prdef($input->{'ContactCreate01'}->{'PostalInfoInt'}->{'Street'}->{'Line'}[2])."'\n";
+        print $out "EppConCreate01PIntCity          = '".$input->{'ContactCreate01'}->{'PostalInfoInt'}->{'City'}."'\n";
+        print $out "EppConCreate01PIntSp            = '".prdef($input->{'ContactCreate01'}->{'PostalInfoInt'}->{'StateProvince'})."'\n";
+        print $out "EppConCreate01PIntPc            = '".prdef($input->{'ContactCreate01'}->{'PostalInfoInt'}->{'PostalCode'})."'\n";
+        print $out "EppConCreate01PIntCc            = '".$input->{'ContactCreate01'}->{'PostalInfoInt'}->{'CountryCode'}."'\n";
+    } else {
+        print $out "EppConCreate01PIntMand          = N\n";
+        print $out "EppConCreate01PIntName          = \n";
+        print $out "EppConCreate01PIntOrg           = \n";
+        print $out "EppConCreate01PIntStreet1       = \n";
+        print $out "EppConCreate01PIntStreet2       = \n";
+        print $out "EppConCreate01PIntStreet3       = \n";
+        print $out "EppConCreate01PIntCity          = \n";
+        print $out "EppConCreate01PIntSp            = \n";
+        print $out "EppConCreate01PIntPc            = \n";
+        print $out "EppConCreate01PIntCc            = \n";
+    }
+    if (defined($input->{'ContactCreate01'}->{'PostalInfoLoc'})) {
+        print $out "EppConCreate01PLocMand          = Y\n";
+        print $out "EppConCreate01PLocName          = '".$input->{'ContactCreate01'}->{'PostalInfoLoc'}->{'Name'}."'\n";
+        print $out "EppConCreate01PLocOrg           = '".prdef($input->{'ContactCreate01'}->{'PostalInfoLoc'}->{'Org'})."'\n";
+        print $out "EppConCreate01PLocStreet1       = '".prdef($input->{'ContactCreate01'}->{'PostalInfoLoc'}->{'Street'}->{'Line'}[0])."'\n";
+        print $out "EppConCreate01PLocStreet2       = '".prdef($input->{'ContactCreate01'}->{'PostalInfoLoc'}->{'Street'}->{'Line'}[1])."'\n";
+        print $out "EppConCreate01PLocStreet3       = '".prdef($input->{'ContactCreate01'}->{'PostalInfoLoc'}->{'Street'}->{'Line'}[2])."'\n";
+        print $out "EppConCreate01PLocCity          = '".$input->{'ContactCreate01'}->{'PostalInfoLoc'}->{'City'}."'\n";
+        print $out "EppConCreate01PLocSp            = '".prdef($input->{'ContactCreate01'}->{'PostalInfoLoc'}->{'StateProvince'})."'\n";
+        print $out "EppConCreate01PLocPc            = '".prdef($input->{'ContactCreate01'}->{'PostalInfoLoc'}->{'PostalCode'})."'\n";
+        print $out "EppConCreate01PLocCc            = '".$input->{'ContactCreate01'}->{'PostalInfoLoc'}->{'CountryCode'}."'\n";
+    } else {
+        print $out "EppConCreate01PLocMand          = N\n";
+        print $out "EppConCreate01PLocName          = \n";
+        print $out "EppConCreate01PLocOrg           = \n";
+        print $out "EppConCreate01PLocStreet1       = \n";
+        print $out "EppConCreate01PLocStreet2       = \n";
+        print $out "EppConCreate01PLocStreet3       = \n";
+        print $out "EppConCreate01PLocCity          = \n";
+        print $out "EppConCreate01PLocSp            = \n";
+        print $out "EppConCreate01PLocPc            = \n";
+        print $out "EppConCreate01PLocCc            = \n";
+    }
+    print $out "EppConCreate01Voice             = '".prdef($input->{'ContactCreate01'}->{'Voice'})."'\n";
+    print $out "EppConCreate01Fax               = '".prdef($input->{'ContactCreate01'}->{'Fax'})."'\n";
+    print $out "EppConCreate01Email             = '$input->{'ContactCreate01'}->{'Email'}'\n";
+    print $out "EppConCreate01Auth              = '".prdef($input->{'ContactCreate01'}->{'Auth'})."'\n";
+    $Ext = $input->{'ContactCreate01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppConCreate01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppConCreate01Ext".$no."Uri          = '".$exten->{'URI'}."'\n";
+        print $out "EppConCreate01Ext".$no."Sl           = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppConCreate01Ext".$no."ExtValue     = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppConCreate01Ext".$no."Field".$noj."      = ".$field->{'Name'}."\n";
+            print $out "EppConCreate01Ext".$no."Value".$noj."      = ".prdef($field->{'Value'})."\n";                                     
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppConCreate01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppConCreate01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    print $out "\n";
+
+    print $out "[EppConDelete01]\n";
+    print STDERR "WARNING: ".$input->{'ContactDelete01'}->{'ContactID'}." already in test\n" if (true { /$input->{'ContactDelete01'}->{'ContactID'}/i } @conArr) > 0;
+    push @conArr, $input->{'ContactDelete01'}->{'ContactID'};
+    print $out "EppConDelete01Id                = ".$input->{'ContactDelete01'}->{'ContactID'}."\n";
+    $Ext = $input->{'ContactDelete01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppConDelete01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppConDelete01Ext".$no."Uri          = '".$exten->{'URI'}."'\n";
+        print $out "EppConDelete01Ext".$no."Sl           = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppConDelete01Ext".$no."ExtValue     = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppConDelete01Ext".$no."Field".$noj."      = ".$field->{'Name'}."\n";
+            print $out "EppConDelete01Ext".$no."Value".$noj."      = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppConDelete01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppConDelete01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    print $out "\n";
+ 
+    print $out "[EppHostDelete01]\n";
+    if (defined($hostObj) && not defined($input->{'HostDelete01'}->{'Name'})) {
+      print STDERR "WARN - Mising HostDelete01 part with HostObject\n";
+    } else {
+      print STDERR "WARNING: EppHostDelete:Name: ".$input->{'HostDelete01'}->{'Name'}." not in zone\n" if (not $input->{'HostDelete01'}->{'Name'} =~ m/$tld$/i) ;
+      push @hostArr, $input->{'HostDelete01'}->{'Name'};
+    }
+    print $out "EppHostDelete01Name             = ".prdef($input->{'HostDelete01'}->{'Name'})."\n";
+    $Ext = $input->{'HostDelete01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppHostDelete01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppHostDelete01Ext".$no."Uri         = '".$exten->{'URI'}."'\n";
+        print $out "EppHostDelete01Ext".$no."Sl          = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppHostDelete01Ext".$no."ExtValue    = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppHostDelete01Ext".$no."Field".$noj."     = ".$field->{'Name'}."\n";
+            print $out "EppHostDelete01Ext".$no."Value".$noj."     = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppHostDelete01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppHostDelete01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    print $out "\n";
+ 
+    print $out "[EppHostUpdate01]\n";
+    if (defined($hostObj) && not defined($input->{'HostUpdate01'}->{'Name'})) {
+      print STDERR "WARN - Mising HostUpdate01 part with HostObject\n";
+    } else {
+      print STDERR "WARNING: EppHostUpdate01:Name: ".$input->{'HostUpdate01'}->{'Name'}." not in zone\n" if (not $input->{'HostUpdate01'}->{'Name'} =~ m/$tld$/i) ;
+      print STDERR "WARNING: ".$input->{'HostUpdate01'}->{'Name'}." already in test\n" if (true { /$input->{'HostUpdate01'}->{'Name'}/i } @hostArr) > 0;
+      push @hostArr, $input->{'HostUpdate01'}->{'Name'};
+    }
+    print $out "EppHostUpdate01Name             = ".prdef($input->{'HostUpdate01'}->{'Name'})."\n";
+    print $out "EppHostUpdate01Ipv4             = ".prdef($input->{'HostUpdate01'}->{'IP'})."\n";
+    $Ext = $input->{'HostUpdate01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppHostUpdate01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppHostUpdate01Ext".$no."Uri         = '".$exten->{'URI'}."'\n";
+        print $out "EppHostUpdate01Ext".$no."Sl          = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppHostUpdate01Ext".$no."ExtValue    = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppHostUpdate01Ext".$no."Field".$noj."     = ".$field->{'Name'}."\n";
+            print $out "EppHostUpdate01Ext".$no."Value".$noj."     = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppHostUpdate01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppHostUpdate01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    print $out "\n";
+ 
+    print $out "[EppConUpdate01]\n";
+    print STDERR "WARNING: ".$input->{'ContactUpdate01'}->{'ContactID'}." already in test\n" if (true { /$input->{'ContactUpdate01'}->{'ContactID'}/i } @conArr) > 0;
+    push @conArr, $input->{'ContactUpdate01'}->{'ContactID'};
+    print $out "EppConUpdate01Id                = ".$input->{'ContactUpdate01'}->{'ContactID'}."\n";
+    print $out "EppConUpdate01Email             = ".$input->{'ContactUpdate01'}->{'Email'}."\n";
+    $Ext = $input->{'ContactUpdate01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppConUpdate01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppConUpdate01Ext".$no."Uri          = '".$exten->{'URI'}."'\n";
+        print $out "EppConUpdate01Ext".$no."Sl           = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppConUpdate01Ext".$no."ExtValue     = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppConUpdate01Ext".$no."Field".$noj."      = ".$field->{'Name'}."\n";
+            print $out "EppConUpdate01Ext".$no."Value".$noj."      = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppConUpdate01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppConUpdate01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    print $out "\n";
+ 
+    print $out "[EppDomUpdate01]\n";
+    print $out "EppDomUpdate01Name              = ".$input->{'DomainUpdate01'}->{'Name'}."\n";
+    print STDERR "WARNING: EppDomUpdate01:Name: ".$domain04." not in zone\n" if (not $domain04 =~ m/$tld$/i) ;
+    print STDERR "WARNING: $domain04 already in test\n" if (true { /$domain04/i } @domArr) > 0;
+    push @domArr, $domain04;
+    $Ext = $input->{'DomainUpdate01'}->{'Extension'};
+    $i = 1;
+    foreach my $exten (@{$Ext}) {
+        my $no = sprintf("%02d",$i);
+        if (defined($exten->{'ExtName'})) {
+            print $out "EppDomUpdate01Ext".$no."ExtName      = '".$exten->{'ExtName'}."'\n";
+        }
+        print $out "EppDomUpdate01Ext".$no."Uri          = '".$exten->{'URI'}."'\n";
+        print $out "EppDomUpdate01Ext".$no."Sl           = '".$exten->{'SL'}."'\n";
+        if (defined($exten->{'ExtValue'})) {
+            print $out "EppDomUpdate01Ext".$no."ExtValue     = '".$exten->{'ExtValue'}."'\n";
+        }
+        my $j = 1;
+        foreach my $field (@{$exten->{'Field'}}) {
+            my $noj = sprintf("%02d",$j);
+            print $out "EppDomUpdate01Ext".$no."Field".$noj."      = ".$field->{'Name'}."\n";
+            print $out "EppDomUpdate01Ext".$no."Value".$noj."      = ".prdef($field->{'Value'})."\n";
+            my $k = 1;
+            foreach my $field2 (@{$field->{'Field'}}) {
+                my $nok = sprintf("%02d",$k);
+                print $out "EppDomUpdate01Ext".$no."Field".$noj."Sub".$nok."Field      = ".$field2->{'Name'}."\n";
+                print $out "EppDomUpdate01Ext".$no."Field".$noj."Sub",$nok."Value      = ".$field2->{'Value'}."\n";
+                $k++;
+            }
+            $j++;
+        }
+        $i++;
+    }
+    $type = "";
+    if (defined($input->{'DomainUpdate01'}->{'DNSSEC'}->{'DS'}[0])) {
+        $type = "D";
+    }
+    if (defined($input->{'DomainUpdate01'}->{'DNSSEC'}->{'DNSKEY'}[0])) {
+        $type .= "K";
+    }
+    print $out "EppDomUpdate01KeyType           = '".$type."'\n";
+    $i = 1;
+    if (($type eq 'D') || ($type eq "DK")) {
+        $dnssec = $input->{'DomainUpdate01'}->{'DNSSEC'}->{'DS'};
+        foreach my $rec (@{$dnssec}) {
+            my $no = sprintf("%02d",$i);
+            print $out "EppDomUpdate01DsKeyTag".$no."        = ".$rec->{'KeyTag'}."\n";
+            print $out "EppDomUpdate01DsAlg".$no."           = ".$rec->{'Algorithm'}."\n";
+            print $out "EppDomUpdate01DsDigestType".$no."    = ".$rec->{'DigestType'}."\n";
+            print $out "EppDomUpdate01DsDigest".$no."        = ".$rec->{'Digest'}."\n";
+            $i++;
+        }
+    }
+    $i = 1;
+    if (($type eq 'K') || ($type eq "DK")) {
+        $dnssec = $input->{'DomainUpdate01'}->{'DNSSEC'}->{'DNSKEY'};
+        foreach my $rec (@{$dnssec}) {
+            my $no = sprintf("%02d",$i);
+            print $out "EppDomUpdate01KdFlags".$no."         = ".$rec->{'Flags'}."\n";
+            print $out "EppDomUpdate01KdProtocol".$no."      = ".$rec->{'Protocol'}."\n";
+            print $out "EppDomUpdate01KdAlg".$no."           = ".$rec->{'Algorithm'}."\n";
+            # Strip spaces/newlines etc
+            my $key = $rec->{'PublicKey'};
+            $key =~ s/\s+//g;
+            print $out "EppDomUpdate01KdPubKey".$no."        = '".$key."'\n";
+            $i++;
+        }
+    }
+    print $out "\n";
+    close $out;
+}
+
+sub prdef {
+    my $input = shift;
+    if (defined($input)) {
+        return $input;
+    } else {
+        return "";
+    }
+}
+
+=head1 NAME
+
+    epp-convert
+
+=head1 DESCRIPTION
+
+Validate and convert input data to intermediate INI format used by epp-test.
+
+The auxillary client certificate output file is either overwritten or deleted
+depeding on whether or not a client certificate is specified in the input data.
+
+=head1 USAGE
+
+epp-convert --help
+
+epp-convert [options] --zone ZONE [INFILE]
+
+Mandatory arguments:
+
+  --zone ZONE       The name of the DNS zone TLD, used for domain name sanity
+                    check.
+
+Optional arguments:
+
+  INFILE            The input data file. (default is pdtepp.xml)
+
+  --help            Show this help message.
+  --out-file        The config output file. (default is config.ini)
+  --out-cert        The client certificate output file. (default is cert.pem)
+  --schema FILE     The schema input file for validation. (default is
+                    pdtepp.xsd in the same directory as this script)
+
+=cut

@@ -1,0 +1,26 @@
+# BSD-2-Clause
+epp-convert
+epp-test
+pdtepp/pdtConCreate01.php
+pdtepp/pdtConDelete01.php
+pdtepp/pdtConUpdate01.php
+pdtepp/pdtConnTest.php
+pdtepp/pdtDomCreate01.php
+pdtepp/pdtDomCreate02.php
+pdtepp/pdtDomCreate03.php
+pdtepp/pdtDomDelete01.php
+pdtepp/pdtDomRenew01.php
+pdtepp/pdtDomTransfer01.php
+pdtepp/pdtDomTransfer02.php
+pdtepp/pdtDomUpdate01.php
+pdtepp/pdtHostDelete01.php
+pdtepp/pdtHostUpdate01.php
+# CC-BY
+pdtepp/lib/parseIniFile.php
+# LGPL-2.1
+pdtepp/lib/ireg.php
+pdtepp/lib/ireg_epp_log.php
+pdtepp/lib/ireg_lib.php
+pdtepp/lib/ireg_obj.php
+# GPL-2.0
+pdtepp/lib/Client.php
