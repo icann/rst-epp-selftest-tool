@@ -50,12 +50,10 @@ which EPP Selftest Tool repository branch to use.
 
 Licensing
 =========
-The entire source code is [BSD-2-Clause]( LICENSE-BSD-2-Clause) except ireg
+The entire source code is [this license]( LICENSE) except ireg
 which is [LGPL 2.1]( LICENSE-LGPL-2.1), Client.php which is [GPL 2.0](
 LICENSE-GPL-2.0) and parseIniFile.php which is [Creative Commons Attribution](
 LICENSE-CC-BY). Refer to the respective files for copyright ownership.
-
-For a breakdown of the licensing, see [PACKAGE-LICENSING]( PACKAGE-LICENSING).
 
 Dependencies
 ============
