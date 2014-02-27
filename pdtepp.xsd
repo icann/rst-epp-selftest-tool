@@ -29,7 +29,7 @@
   <xs:element name="Server">
     <xs:complexType>
       <xs:sequence>
-	<xs:element ref="SNIServerName" minOccurs="0" maxOccurs="1"/>
+        <xs:element minOccurs="0" ref="SNIName"/>
         <xs:element name="IPv4">
           <xs:complexType>
             <xs:sequence>
@@ -50,7 +50,7 @@
       </xs:sequence>
     </xs:complexType>
   </xs:element>
-  <xs:element name="SNIServerName" type="xs:string"/>
+  <xs:element name="SNIName" type="xs:string"/>
   <xs:element name="Port">
     <xs:simpleType>
       <xs:restriction base="xs:positiveInteger">

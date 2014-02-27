@@ -138,8 +138,8 @@ sub eppCreateIni {
         print $out "EppExtSl-".$i."              = '".$exten->{'SL'}."'\n";
         $i++;
     }
-    if (defined($input->{'Server'}->{'SNIServerName'})) {
-      print $out "EppSNIServerName        = ".$input->{'Server'}->{'SNIServerName'}."\n";
+    if (defined($input->{'Server'}->{'SNIName'})) {
+      print $out "EppSNIServerName        = ".$input->{'Server'}->{'SNIName'}."\n";
     }
     print $out "EppServerIPv4           = ".$input->{'Server'}->{'IPv4'}->{'Address'}."\n";
     print $out "EppServerIPv4Port       = ".$input->{'Server'}->{'IPv4'}->{'Port'}."\n";
