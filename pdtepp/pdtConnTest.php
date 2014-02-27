@@ -59,6 +59,9 @@ $init = array(
 );
 if (array_key_exists('h', $args)) {
         $init[$registry]['epphost'] = $args['h'];
+	if (isset($config['EppConnTest']['EppSNIServerName'])) {
+		$init[$registry]['eppsniname'] = $config['EppConnTest']['EppSNIServerName'];
+	}
 } elseif (array_key_exists('6', $args)) {
 	$init[$registry]['epphost'] = $config['EppConnTest']['EppServerIPv6'];
 } else {

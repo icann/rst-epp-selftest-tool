@@ -215,7 +215,7 @@ class ireg {
 			if ($this->debug) fwrite($this->dfh, "--- connect localcert(".$this->local_cert_path.")\n");
 			$this->epp->local_cert($this->local_cert_path, $this->local_cert_pwd);
 		}
-		$greeting = $this->epp->connect($this->host, $this->port, $this->timeout, $this->ssl);
+		$greeting = $this->epp->connect($this->host, $this->port, $this->timeout, $this->ssl, $this->sniname);
 		if (PEAR::isError($greeting)) {
 			$this->resCode = -1;
 			$this->msg = "PEAR ERROR: ".$greeting->getMessage();
