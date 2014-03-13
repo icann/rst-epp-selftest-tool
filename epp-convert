@@ -138,6 +138,9 @@ sub eppCreateIni {
         print $out "EppExtSl-".$i."              = '".$exten->{'SL'}."'\n";
         $i++;
     }
+    if (defined($input->{'Server'}->{'SNIServerName'})) {
+      print $out "EppSNIServerName        = ".$input->{'Server'}->{'SNIServerName'}."\n";
+    }
     print $out "EppServerIPv4           = ".$input->{'Server'}->{'IPv4'}->{'Address'}."\n";
     print $out "EppServerIPv4Port       = ".$input->{'Server'}->{'IPv4'}->{'Port'}."\n";
     if (defined($input->{'Server'}->{'IPv6'})) {
@@ -438,7 +441,7 @@ sub eppCreateIni {
         $i++;
     }
     print $out "\n";
- 
+
     print $out "[EppDomTransfer01]\n";
     print STDERR "WARNING: EppDomTransfer01:Name: ".$input->{'DomainTransfer01'}->{'Name'}." not in zone\n" if (not $input->{'DomainTransfer01'}->{'Name'} =~ m/$tld$/i) ;
     print STDERR "WARNING: ".$input->{'DomainTransfer01'}->{'Name'}." already in test\n" if (true { /$input->{'DomainTransfer01'}->{'Name'}/i } @domArr) > 0;
@@ -490,7 +493,7 @@ sub eppCreateIni {
         $i++;
     }
     print $out "\n";
- 
+
     print $out "[EppDomTransfer02]\n";
     if (defined($input->{'DomainTransfer02'})) {
         print $out "EppDomTransfer02Approve         = Y\n";
@@ -513,7 +516,7 @@ sub eppCreateIni {
         } else {
             print $out "EppDomTransfer02AuthRoid        = \n";
         }
-    
+
         $Ext = $input->{'DomainTransfer02'}->{'Extension'};
         $i = 1;
         foreach my $exten (@{$Ext}) {
@@ -588,7 +591,7 @@ sub eppCreateIni {
         $i++;
     }
     print $out "\n";
- 
+
     print $out "[EppConCreate01]\n";
     print $out "EppConCreate01Id                = ".$input->{'ContactCreate01'}->{'ContactID'}."\n";
     push @conArr, $input->{'ContactCreate01'}->{'ContactID'};
@@ -658,7 +661,7 @@ sub eppCreateIni {
         foreach my $field (@{$exten->{'Field'}}) {
             my $noj = sprintf("%02d",$j);
             print $out "EppConCreate01Ext".$no."Field".$noj."      = ".$field->{'Name'}."\n";
-            print $out "EppConCreate01Ext".$no."Value".$noj."      = ".prdef($field->{'Value'})."\n";                                     
+            print $out "EppConCreate01Ext".$no."Value".$noj."      = ".prdef($field->{'Value'})."\n";
             my $k = 1;
             foreach my $field2 (@{$field->{'Field'}}) {
                 my $nok = sprintf("%02d",$k);
@@ -705,7 +708,7 @@ sub eppCreateIni {
         $i++;
     }
     print $out "\n";
- 
+
     print $out "[EppHostDelete01]\n";
     if (defined($hostObj) && not defined($input->{'HostDelete01'}->{'Name'})) {
       print STDERR "WARN - Mising HostDelete01 part with HostObject\n";
@@ -743,7 +746,7 @@ sub eppCreateIni {
         $i++;
     }
     print $out "\n";
- 
+
     print $out "[EppHostUpdate01]\n";
     if (defined($hostObj) && not defined($input->{'HostUpdate01'}->{'Name'})) {
       print STDERR "WARN - Mising HostUpdate01 part with HostObject\n";
@@ -783,7 +786,7 @@ sub eppCreateIni {
         $i++;
     }
     print $out "\n";
- 
+
     print $out "[EppConUpdate01]\n";
     print STDERR "WARNING: ".$input->{'ContactUpdate01'}->{'ContactID'}." already in test\n" if (true { /$input->{'ContactUpdate01'}->{'ContactID'}/i } @conArr) > 0;
     push @conArr, $input->{'ContactUpdate01'}->{'ContactID'};
@@ -818,7 +821,7 @@ sub eppCreateIni {
         $i++;
     }
     print $out "\n";
- 
+
     print $out "[EppDomUpdate01]\n";
     print $out "EppDomUpdate01Name              = ".$input->{'DomainUpdate01'}->{'Name'}."\n";
     print STDERR "WARNING: EppDomUpdate01:Name: ".$domain04." not in zone\n" if (not $domain04 =~ m/$tld$/i) ;
