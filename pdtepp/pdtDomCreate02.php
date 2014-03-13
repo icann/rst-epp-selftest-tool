@@ -97,9 +97,6 @@ if (isset($config['EppConnTest']['EppNsHostUri'] ) ) {
 } else {
 	$hostObj = false;
 }
-// To handle create we user pdt EppDomCreate01's nameserver to create the domain so that we can then update it.
-$oldns01 = $config["EppDomCreate01"]['EppDomCreate01Ns01'];
-$oldns02 = $config["EppDomCreate01"]['EppDomCreate01Ns02'];
 
 if ($hostObj == true) {
 	// Create Ns01
