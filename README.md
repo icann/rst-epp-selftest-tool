@@ -22,8 +22,9 @@ see the PDT EPP documents.
 
 Version history
 ===============
- * 1.0 - Unpublished internal version
- * 2.0 - Initial public release
+ * v1.0.0 - Unpublished internal version
+ * v2.0.0 - Initial public release (2013-09-27)
+ * v2.1.0 - SNI support, clean-up, bug fixes (2014-03-13)
 
 References
 ==========
@@ -39,14 +40,19 @@ microsite hosts the following documents relevant to the EPP Selftest Tool:
 
 Specification compatibility matrix
 ----------------------------------
-The EPP Selftest Tool repository contains branches matching different ranges of
-versions of specifications. Refer to this compatibility matrix when deciding
-which EPP Selftest Tool repository branch to use.
+Refer to this compatibility matrix when deciding which version of EPP Selftest
+Tool to use.
 
 <table>
-<tr><th>EPP Selftest Tool branch</th><th>PDT Input Data Templates</th><th>PDT Test Specifications</th></tr>
-<tr><td>master</td><td>v.2.2</td><td>v.2.2</td></tr>
+<tr><th>EPP Selftest Tool version</th><th>PDT Input Data Templates</th><th>PDT Test Specifications</th></tr>
+<tr><td>v2.0.0</td><td>v.2.2</td><td>v.2.2</td></tr>
+<tr><td>v2.1.0</td><td>v.2.3<sup>1</sup></td><td>v.2.3</td></tr>
 </table>
+
+<sup>1</sup> For SNI-support, the `pdtepp.xsd` of the PDT Input Data Templates
+zip needs to be replaced with the `pdtepp.xsd` supplied with the
+EPP-Selftest-Tool. No replacement for the `pdtepp.rnc` of the PDT Input Data
+Templates zip is provided.
 
 Licensing
 =========
@@ -74,12 +80,12 @@ Dependencies
 
 Installation
 ============
-Clone the project repository and choose branch according to the specification
+Clone the project repository and choose version according to the specification
 compatibility matrix.
 
     $> git clone https://github.com/dotse/EPP-Selftest-Tool.git <installdir>
     $> cd <installdir>
-    $> git checkout <branch>
+    $> git checkout <version>
 
 `<installdir>` is assumed to be in the PATH in code examples throughout the
 rest of this document.
