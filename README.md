@@ -66,13 +66,8 @@ Dependencies
  * Ubuntu 12.04
  * Perl 5.14
    * Config::IniFiles
-   * Cwd
    * DateTime
-   * File::Basename
-   * File::Temp
-   * Getopt::Long
    * List::MoreUtils
-   * Pod::Usage
    * XML::LibXML
    * XML::Simple
  * PHP 5.3
