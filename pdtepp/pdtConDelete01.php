@@ -61,8 +61,8 @@ $init = array(
 );
 if (array_key_exists('s', $args)) {
 	$init[$registry]['eppssl'] = 'true';
-	if (isset($config['EppConnTest']['EppSNIServerName'])) {
-		$init[$registry]['eppsniname'] = $config['EppConnTest']['EppSNIServerName'];
+	if (!inet_pton($args['h'])) {
+		$init[$registry]['eppsniname'] = $args['h'];
 	}
 } else {
 	$init[$registry]['eppssl'] = 'false';
