@@ -59,9 +59,6 @@ $init = array(
 );
 if (array_key_exists('h', $args)) {
         $init[$registry]['epphost'] = $args['h'];
-	if (!inet_pton($args['h'])) {
-		$init[$registry]['eppsniname'] = $args['h'];
-	}
 } elseif (array_key_exists('6', $args)) {
 	$init[$registry]['epphost'] = $config['EppConnTest']['EppServerIPv6'];
 } else {
@@ -76,9 +73,6 @@ if (array_key_exists('p', $args)) {
 }
 if (array_key_exists('s', $args)) {
 	$init[$registry]['eppssl'] = 'true';
-	if (!inet_pton($args['h'])) {
-		$init[$registry]['eppsniname'] = $args['h'];
-	}
 } else {
 	$init[$registry]['eppssl'] = 'false';
 }
