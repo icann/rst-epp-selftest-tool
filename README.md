@@ -22,9 +22,10 @@ see the PDT EPP documents.
 
 Version history
 ===============
- * v1.0.0 - Unpublished internal version
- * v2.0.0 - Initial public release (2013-09-27)
+ * v2.2.0 - Updated XML schema (2014-06-27)
  * v2.1.0 - SNI support, clean-up, bug fixes (2014-03-13)
+ * v2.0.0 - Initial public release (2013-09-27)
+ * v1.0.0 - Unpublished internal version
 
 References
 ==========
@@ -45,8 +46,9 @@ Tool to use.
 
 <table>
 <tr><th>EPP Selftest Tool version</th><th>PDT Input Data Templates</th><th>PDT Test Specifications</th></tr>
-<tr><td>v2.0.0</td><td>v.2.2</td><td>v.2.2</td></tr>
+<tr><td>v2.2.0</td><td>v.2.4</td><td>v.2.4</td></tr>
 <tr><td>v2.1.0</td><td>v.2.3<sup>1</sup></td><td>v.2.3</td></tr>
+<tr><td>v2.0.0</td><td>v.2.2</td><td>v.2.2</td></tr>
 </table>
 
 <sup>1</sup> For SNI-support, the `pdtepp.xsd` of the PDT Input Data Templates
@@ -139,3 +141,11 @@ information of the respective commands.
 
     $> epp-convert --help
     $> epp-test --help
+
+Troubleshooting
+===============
+ * `epp-test` is unable to resolve an EPP server domain name in an undelegated zone:
+
+   > The domain name resolution is performed by the operating system.  In order help
+   > the operating system resolve the name you can add an entry to your `hosts`
+   > file or use a custom DNS server that _does_ delegate the zone.
