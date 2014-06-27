@@ -29,11 +29,14 @@
   <xs:element name="Server">
     <xs:complexType>
       <xs:sequence>
-        <xs:element minOccurs="0" ref="SNIName"/>
         <xs:element name="IPv4">
           <xs:complexType>
             <xs:sequence>
-              <xs:element name="Address" type="ipv4"/>
+              <xs:element name="Address">
+                <xs:simpleType>
+                  <xs:union memberTypes="ipv4 fqdn"/>
+                </xs:simpleType>
+              </xs:element>
               <xs:element ref="Port"/>
             </xs:sequence>
           </xs:complexType>
@@ -41,7 +44,11 @@
         <xs:element minOccurs="0" name="IPv6">
           <xs:complexType>
             <xs:sequence>
-              <xs:element name="Address" type="ipv6"/>
+              <xs:element name="Address">
+                <xs:simpleType>
+                  <xs:union memberTypes="ipv6 fqdn"/>
+                </xs:simpleType>
+              </xs:element>
               <xs:element ref="Port"/>
             </xs:sequence>
           </xs:complexType>
@@ -50,7 +57,6 @@
       </xs:sequence>
     </xs:complexType>
   </xs:element>
-  <xs:element name="SNIName" type="xs:string"/>
   <xs:element name="Port">
     <xs:simpleType>
       <xs:restriction base="xs:positiveInteger">

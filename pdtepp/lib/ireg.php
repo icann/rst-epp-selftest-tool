@@ -49,7 +49,6 @@ class ireg {
 	private $port;
 	private $timeout;
 	private $ssl;
-	private $sniname;
 	private $epp;
 	private $resCode;
 	private $msg;
@@ -113,9 +112,6 @@ class ireg {
         private function initialize($init) {
 		$this->host	= $init['tld']['epphost'];
 		$this->port	= $init['tld']['eppport'];
-		if (isset($init['tld']['eppsniname'])) {
-			$this->sniname	= $init['tld']['eppsniname'];
-		}
 		$this->timeout	= $init['tld']['epptimeout'];
 		if ($init['tld']['eppssl'] == 'true') {
 			$this->ssl	= true;
@@ -215,7 +211,7 @@ class ireg {
 			if ($this->debug) fwrite($this->dfh, "--- connect localcert(".$this->local_cert_path.")\n");
 			$this->epp->local_cert($this->local_cert_path, $this->local_cert_pwd);
 		}
-		$greeting = $this->epp->connect($this->host, $this->port, $this->timeout, $this->ssl, $this->sniname);
+		$greeting = $this->epp->connect($this->host, $this->port, $this->timeout, $this->ssl);
 		if (PEAR::isError($greeting)) {
 			$this->resCode = -1;
 			$this->msg = "PEAR ERROR: ".$greeting->getMessage();

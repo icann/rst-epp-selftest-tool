@@ -110,7 +110,8 @@ sub eppCreateIni {
     my $domain04 = $input->{'DomainUpdate01'}->{'Name'};
 
 
-    open(my $out, ">:encoding(UTF-8)", $out_file);
+    open(my $out, ">:encoding(UTF-8)", $out_file)
+      or die qq{Cannot open "$out_file": $!};
 
     print $out "; epptest @ $timestamp\n";
     print $out ";\n";
@@ -137,9 +138,6 @@ sub eppCreateIni {
         print $out "EppExtUri-".$i."             = '".$exten->{'URI'}."'\n";
         print $out "EppExtSl-".$i."              = '".$exten->{'SL'}."'\n";
         $i++;
-    }
-    if (defined($input->{'Server'}->{'SNIName'})) {
-      print $out "EppSNIServerName        = ".$input->{'Server'}->{'SNIName'}."\n";
     }
     print $out "EppServerIPv4           = ".$input->{'Server'}->{'IPv4'}->{'Address'}."\n";
     print $out "EppServerIPv4Port       = ".$input->{'Server'}->{'IPv4'}->{'Port'}."\n";
