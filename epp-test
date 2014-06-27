@@ -78,7 +78,8 @@ my %testlist = (
 
 # Append to $log_file
 sub print_log {
-    open(my $fh, '>>:encoding(UTF-8)', $log_file);
+    open(my $fh, '>>:encoding(UTF-8)', $log_file)
+        or die qq{Cannot open "$log_file": $!};
     print $fh @_;
     close($fh);
 }
